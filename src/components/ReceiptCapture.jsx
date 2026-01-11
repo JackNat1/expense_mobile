@@ -1,9 +1,15 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { Camera, Upload, X } from 'lucide-react';
 
 const ReceiptCapture = ({ onCapture, existingImage }) => {
-  const [preview, setPreview] = useState(existingImage || null);
+  const [preview, setPreview] = useState(null);
   const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    if (existingImage) {
+      setPreview(existingImage);
+    }
+  }, [existingImage]);
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];

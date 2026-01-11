@@ -4,6 +4,7 @@ import { ExpenseProvider } from './context/ExpenseContext';
 import Dashboard from './pages/Dashboard';
 import AddExpense from './pages/AddExpense';
 import PWAReloadPrompt from './components/PWAReloadPrompt';
+import Settings from './pages/Settings';
 
 function App() {
   return (
@@ -13,6 +14,7 @@ function App() {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/add" element={<AddExpense />} />
+            <Route path="/settings" element={<Settings />} />
           </Routes>
           <PWAReloadPrompt />
         </div>

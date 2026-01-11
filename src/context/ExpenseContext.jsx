@@ -75,6 +75,20 @@ export const ExpenseProvider = ({ children }) => {
     }
   };
 
+  const updateExpense = (id, updatedExpense) => {
+    setExpenses((prev) =>
+      prev.map((e) => (e.id === id ? { ...updatedExpense, id, updatedAt: new Date().toISOString() } : e))
+    );
+
+    // Auto-add new customer/project if they don't exist
+    if (updatedExpense.customer && !customers.includes(updatedExpense.customer)) {
+      setCustomers((prev) => [...prev, updatedExpense.customer]);
+    }
+    if (updatedExpense.project && !projects.includes(updatedExpense.project)) {
+      setProjects((prev) => [...prev, updatedExpense.project]);
+    }
+  };
+
   const deleteExpense = (id) => {
     setExpenses((prev) => prev.filter((e) => e.id !== id));
   };
@@ -87,6 +101,7 @@ export const ExpenseProvider = ({ children }) => {
         customers,
         projects,
         addExpense,
+        updateExpense,
         deleteExpense,
       }}
     >

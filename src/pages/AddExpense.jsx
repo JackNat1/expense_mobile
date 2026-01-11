@@ -1,12 +1,14 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useExpenses } from '../context/ExpenseContext';
 import ReceiptCapture from '../components/ReceiptCapture';
 import { ChevronLeft, Save, Plus } from 'lucide-react';
 
 const AddExpense = () => {
   const navigate = useNavigate();
-  const { addExpense, categories, customers, projects } = useExpenses();
+  const [searchParams] = useSearchParams();
+  const editId = searchParams.get('edit');
+  const { addExpense, updateExpense, expenses, categories, customers, projects } = useExpenses();
 
   const [formData, setFormData] = useState({
     amount: '',
@@ -23,6 +25,15 @@ const AddExpense = () => {
 
   const [showNewCustomer, setShowNewCustomer] = useState(false);
   const [showNewProject, setShowNewProject] = useState(false);
+
+  useEffect(() => {
+    if (editId && expenses.length > 0) {
+      const existing = expenses.find(e => e.id === editId);
+      if (existing) {
+        setFormData(existing);
+      }
+    }
+  }, [editId, expenses]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -41,7 +52,11 @@ const AddExpense = () => {
       mileage: formData.type === 'mileage' ? parseFloat(formData.mileage) : 0,
     };
 
-    addExpense(submittedData);
+    if (editId) {
+      updateExpense(editId, submittedData);
+    } else {
+      addExpense(submittedData);
+    }
     navigate('/');
   };
 
@@ -56,7 +71,7 @@ const AddExpense = () => {
         <button onClick={() => navigate(-1)} className="p-2 -ml-2 text-gray-600">
           <ChevronLeft size={24} />
         </button>
-        <h1 className="text-xl font-bold">Add New Entry</h1>
+        <h1 className="text-xl font-bold">{editId ? 'Edit Entry' : 'Add New Entry'}</h1>
         <div className="w-10"></div>
       </header>
 
@@ -86,7 +101,10 @@ const AddExpense = () => {
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Receipt Image</label>
-              <ReceiptCapture onCapture={(img) => setFormData(p => ({...p, receiptImage: img}))} />
+              <ReceiptCapture 
+                onCapture={(img) => setFormData(p => ({...p, receiptImage: img}))} 
+                existingImage={formData.receiptImage}
+              />
             </div>
 
             <div>
@@ -250,7 +268,7 @@ const AddExpense = () => {
           className="w-full py-4 bg-blue-600 text-white font-bold rounded-xl shadow-lg hover:bg-blue-700 transition-colors flex items-center justify-center space-x-2"
         >
           <Save size={20} />
-          <span>Save Entry</span>
+          <span>{editId ? 'Update Entry' : 'Save Entry'}</span>
         </button>
       </form>
     </div>

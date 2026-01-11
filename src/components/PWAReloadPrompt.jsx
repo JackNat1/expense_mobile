@@ -3,8 +3,8 @@ import { useRegisterSW } from 'virtual:pwa-register/react';
 
 const PWAReloadPrompt = () => {
   const {
-    offlineReady: [offlineReady, setOfflineReady],
-    needUpdate: [needUpdate, setNeedUpdate],
+    offlineReady: [offlineReady, setOfflineReady] = [false, () => {}],
+    needUpdate: [needUpdate, setNeedUpdate] = [false, () => {}],
     updateServiceWorker,
   } = useRegisterSW({
     onRegistered(r) {
@@ -13,12 +13,17 @@ const PWAReloadPrompt = () => {
     onRegisterError(error) {
       console.log('SW registration error', error);
     },
-  });
+  }) || {}; // Fallback to empty object if useRegisterSW returns undefined
 
   const close = () => {
     setOfflineReady(false);
     setNeedUpdate(false);
   };
+
+  // Only render if we actually have one of the states active
+  if (!offlineReady && !needUpdate) {
+    return null;
+  }
 
   return (
     <div className="fixed bottom-0 right-0 p-4 z-50">

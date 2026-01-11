@@ -51,3 +51,25 @@ npm run preview
 - **PDF Generation**: jsPDF + jsPDF-autotable
 - **PWA**: vite-plugin-pwa
 - **Date Handling**: date-fns
+const PWAReloadPrompt = () => {
+  const swResult = useRegisterSW({
+    onRegistered(r) {
+      console.log('SW Registered: ' + r);
+    },
+    onRegisterError(error) {
+      console.log('SW registration error', error);
+    },
+  });
+
+  // If the hook returns undefined (common in dev mode), don't render anything
+  if (!swResult) {
+    return null;
+  }
+
+  const {
+    offlineReady: [offlineReady, setOfflineReady],
+    needUpdate: [needUpdate, setNeedUpdate],
+    updateServiceWorker,
+  } = swResult;
+
+  const close = () => {
