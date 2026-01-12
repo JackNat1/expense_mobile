@@ -1,9 +1,141 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, Database, HardDrive, Cloud, Info } from 'lucide-react';
+import { 
+  ChevronLeft, Database, HardDrive, Cloud, Info, 
+  Trash2, Eye, EyeOff, ChevronUp, ChevronDown, SortAsc, Plus 
+} from 'lucide-react';
+import { useExpenses } from '../context/ExpenseContext';
+
+const ListEditor = ({ title, type, items, hiddenItems, onUpdate, onToggleVisibility, isUsed }) => {
+  const moveItem = (index, direction) => {
+    const newList = [...items];
+    const newIndex = index + direction;
+    if (newIndex >= 0 && newIndex < newList.length) {
+      [newList[index], newList[newIndex]] = [newList[newIndex], newList[index]];
+      onUpdate(type, newList);
+    }
+  };
+
+  const deleteItem = (value) => {
+    const displayValue = typeof value === 'object' ? value.title : value;
+    if (isUsed(type, value)) {
+      alert(`Cannot delete "${displayValue}" because it is already used in one or more entries.`);
+      return;
+    }
+    if (confirm(`Are you sure you want to delete "${displayValue}"?`)) {
+      onUpdate(type, items.filter(i => i !== value));
+    }
+  };
+
+  const sortAlphanumerically = () => {
+    const newList = [...items].sort((a, b) => {
+      const valA = typeof a === 'object' ? a.title : a;
+      const valB = typeof b === 'object' ? b.title : b;
+      return valA.localeCompare(valB);
+    });
+    onUpdate(type, newList);
+  };
+
+  const addItem = () => {
+    if (type === 'mileageRates') {
+      const title = prompt("Enter rate title (e.g., 2026 IRS Rate):");
+      if (!title) return;
+      const value = prompt("Enter rate value (e.g., 0.65):");
+      if (!value || isNaN(parseFloat(value))) return;
+      
+      const newRate = {
+        id: Date.now().toString(),
+        title,
+        value: parseFloat(value)
+      };
+      onUpdate(type, [...items, newRate]);
+    } else {
+      const newValue = prompt(`Enter new ${title.toLowerCase().slice(0, -1)}:`);
+      if (newValue) {
+        onUpdate(type, [...items, newValue]);
+      }
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 overflow-hidden mb-6">
+      <div className="bg-gray-50 px-4 py-2 border-b flex justify-between items-center">
+        <h3 className="font-bold text-gray-700">{title}</h3>
+        <div className="flex items-center space-x-3">
+          <button 
+            onClick={addItem}
+            className="text-xs flex items-center text-green-600 font-medium"
+          >
+            <Plus size={14} className="mr-1" /> Add
+          </button>
+          <button 
+            onClick={sortAlphanumerically}
+            className="text-xs flex items-center text-blue-600 font-medium"
+          >
+            <SortAsc size={14} className="mr-1" /> Sort A-Z
+          </button>
+        </div>
+      </div>
+      <ul className="divide-y divide-gray-100">
+        {items.map((item, index) => {
+          const isHidden = hiddenItems.some(h => 
+            typeof h === 'object' ? h.id === item.id : h === item
+          );
+          const displayValue = typeof item === 'object' ? `${item.title} (@ $${item.value.toFixed(3)})` : item;
+          
+          return (
+            <li key={typeof item === 'object' ? item.id : item} className={`flex items-center justify-between p-3 ${isHidden ? 'bg-gray-50 opacity-60' : ''}`}>
+              <span className={`flex-1 font-medium ${isHidden ? 'text-gray-400 line-through' : 'text-gray-700'}`}>
+                {displayValue}
+              </span>
+              <div className="flex items-center space-x-1">
+                <button 
+                  onClick={() => moveItem(index, -1)}
+                  disabled={index === 0}
+                  className="p-1.5 text-gray-400 hover:text-blue-600 disabled:opacity-20"
+                >
+                  <ChevronUp size={18} />
+                </button>
+                <button 
+                  onClick={() => moveItem(index, 1)}
+                  disabled={index === items.length - 1}
+                  className="p-1.5 text-gray-400 hover:text-blue-600 disabled:opacity-20"
+                >
+                  <ChevronDown size={18} />
+                </button>
+                <button 
+                  onClick={() => onToggleVisibility(type, item)}
+                  className={`p-1.5 ${isHidden ? 'text-orange-500' : 'text-gray-400 hover:text-blue-600'}`}
+                  title={isHidden ? "Show" : "Hide"}
+                >
+                  {isHidden ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+                <button 
+                  onClick={() => deleteItem(item)}
+                  className="p-1.5 text-gray-400 hover:text-red-600"
+                  title="Delete"
+                >
+                  <Trash2 size={18} />
+                </button>
+              </div>
+            </li>
+          );
+        })}
+        {items.length === 0 && (
+          <li className="p-4 text-center text-sm text-gray-500 italic">No items found</li>
+        )}
+      </ul>
+    </div>
+  );
+};
 
 const Settings = () => {
   const navigate = useNavigate();
+  const { 
+    preferences, setPreferences, 
+    categories, customers, projects, paymentMethods, mileageRates,
+    hiddenItems, updateList, toggleItemVisibility, isItemUsed
+  } = useExpenses();
   const [syncMode, setSyncMode] = useState(() => {
     return localStorage.getItem('sync_mode') || 'local';
   });
@@ -19,6 +151,10 @@ const Settings = () => {
   useEffect(() => {
     localStorage.setItem('sync_file_path', filePath);
   }, [filePath]);
+
+  const togglePreference = (key) => {
+    setPreferences(prev => ({ ...prev, [key]: !prev[key] }));
+  };
 
   return (
     <div className="max-w-2xl mx-auto pb-20">
@@ -123,6 +259,121 @@ const Settings = () => {
           <p className="text-xs text-gray-600 leading-relaxed">
             Changing these settings will not move your existing data. If you switch to Cloud Sync once available, you will be prompted to migrate your local records.
           </p>
+        </section>
+
+        <section>
+          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 px-1">
+            Entry Preferences
+          </h2>
+          <div className="bg-white rounded-xl border border-gray-100 divide-y">
+            <div className="flex items-center justify-between p-4">
+              <div>
+                <p className="font-medium text-gray-900">Remember last Customer</p>
+                <p className="text-xs text-gray-500">Auto-fill customer from previous entry</p>
+              </div>
+              <button 
+                onClick={() => togglePreference('rememberCustomer')}
+                className={`w-12 h-6 rounded-full transition-colors relative ${preferences.rememberCustomer ? 'bg-blue-600' : 'bg-gray-200'}`}
+              >
+                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${preferences.rememberCustomer ? 'left-7' : 'left-1'}`} />
+              </button>
+            </div>
+            
+            <div className="flex items-center justify-between p-4">
+              <div>
+                <p className="font-medium text-gray-900">Remember last Project</p>
+                <p className="text-xs text-gray-500">Auto-fill project from previous entry</p>
+              </div>
+              <button 
+                onClick={() => togglePreference('rememberProject')}
+                className={`w-12 h-6 rounded-full transition-colors relative ${preferences.rememberProject ? 'bg-blue-600' : 'bg-gray-200'}`}
+              >
+                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${preferences.rememberProject ? 'left-7' : 'left-1'}`} />
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between p-4">
+              <div>
+                <p className="font-medium text-gray-900">Remember last Payment Method</p>
+                <p className="text-xs text-gray-500">Auto-fill payment method from previous entry</p>
+              </div>
+              <button 
+                onClick={() => togglePreference('rememberPaymentMethod')}
+                className={`w-12 h-6 rounded-full transition-colors relative ${preferences.rememberPaymentMethod ? 'bg-blue-600' : 'bg-gray-200'}`}
+              >
+                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${preferences.rememberPaymentMethod ? 'left-7' : 'left-1'}`}  />
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between p-4">
+              <div>
+                <p className="font-medium text-gray-900">Remember last Date</p>
+                <p className="text-xs text-gray-500">Auto-fill date from previous entry</p>
+              </div>
+              <button 
+                onClick={() => togglePreference('rememberDate')}
+                className={`w-12 h-6 rounded-full transition-colors relative ${preferences.rememberDate ? 'bg-blue-600' : 'bg-gray-200'}`}
+              >
+                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${preferences.rememberDate ? 'left-7' : 'left-1'}`}  />
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 px-1">
+            List Management
+          </h2>
+          
+          <ListEditor 
+            title="Categories" 
+            type="categories"
+            items={categories} 
+            hiddenItems={hiddenItems.categories || []}
+            onUpdate={updateList}
+            onToggleVisibility={toggleItemVisibility}
+            isUsed={isItemUsed}
+          />
+
+          <ListEditor 
+            title="Mileage Rates" 
+            type="mileageRates"
+            items={mileageRates} 
+            hiddenItems={hiddenItems.mileageRates || []}
+            onUpdate={updateList}
+            onToggleVisibility={toggleItemVisibility}
+            isUsed={isItemUsed}
+          />
+
+          <ListEditor 
+            title="Customers" 
+            type="customers"
+            items={customers} 
+            hiddenItems={hiddenItems.customers || []}
+            onUpdate={updateList}
+            onToggleVisibility={toggleItemVisibility}
+            isUsed={isItemUsed}
+          />
+
+          <ListEditor 
+            title="Projects" 
+            type="projects"
+            items={projects} 
+            hiddenItems={hiddenItems.projects || []}
+            onUpdate={updateList}
+            onToggleVisibility={toggleItemVisibility}
+            isUsed={isItemUsed}
+          />
+
+          <ListEditor 
+            title="Payment Methods" 
+            type="paymentMethods"
+            items={paymentMethods} 
+            hiddenItems={hiddenItems.paymentMethods || []}
+            onUpdate={updateList}
+            onToggleVisibility={toggleItemVisibility}
+            isUsed={isItemUsed}
+          />
         </section>
       </main>
     </div>

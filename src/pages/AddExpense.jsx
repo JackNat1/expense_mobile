@@ -8,23 +8,37 @@ const AddExpense = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const editId = searchParams.get('edit');
-  const { addExpense, updateExpense, expenses, categories, customers, projects } = useExpenses();
+  const { 
+    addExpense, 
+    updateExpense, 
+    expenses, 
+    categories, 
+    customers, 
+    projects, 
+    paymentMethods,
+    mileageRates,
+    hiddenItems,
+    preferences, 
+    lastEntry 
+  } = useExpenses();
 
   const [formData, setFormData] = useState({
     amount: '',
-    category: 'Meals',
-    customer: '',
-    project: '',
-    date: new Date().toISOString().split('T')[0],
+    category: categories.find(c => !hiddenItems?.categories?.includes(c)) || 'Meals',
+    mileageRateId: mileageRates.find(r => !hiddenItems?.mileageRates?.some(h => h.id === r.id))?.id || (mileageRates[0]?.id || ''),
+    customer: preferences?.rememberCustomer ? (lastEntry?.customer || '') : '',
+    project: preferences?.rememberProject ? (lastEntry?.project || '') : '',
+    date: preferences?.rememberDate ? (lastEntry?.date || new Date().toISOString().split('T')[0]) : new Date().toISOString().split('T')[0],
     receiptImage: null,
     notes: '',
-    paymentMethod: 'Credit Card',
+    paymentMethod: preferences?.rememberPaymentMethod ? (lastEntry?.paymentMethod || paymentMethods[0]) : paymentMethods[0],
     type: 'expense', // 'expense' or 'mileage'
     mileage: '',
   });
 
   const [showNewCustomer, setShowNewCustomer] = useState(false);
   const [showNewProject, setShowNewProject] = useState(false);
+  const [showNewCategory, setShowNewCategory] = useState(false);
 
   useEffect(() => {
     if (editId && expenses.length > 0) {
@@ -35,8 +49,8 @@ const AddExpense = () => {
     }
   }, [editId, expenses]);
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
+  const handleSubmit = (e, shouldNavigate = true) => {
+    if (e) e.preventDefault();
     if (formData.type === 'expense' && !formData.amount) {
       alert('Please enter an amount');
       return;
@@ -46,10 +60,21 @@ const AddExpense = () => {
       return;
     }
     
+    let calculatedAmount = formData.type === 'expense' ? parseFloat(formData.amount) : 0;
+    
+    if (formData.type === 'mileage') {
+      const rate = mileageRates.find(r => r.id === formData.mileageRateId);
+      if (rate) {
+        // Round down to nearest cent: Math.floor(value * 100) / 100
+        calculatedAmount = Math.floor(parseFloat(formData.mileage) * rate.value * 100) / 100;
+      }
+    }
+
     const submittedData = {
       ...formData,
-      amount: formData.type === 'expense' ? parseFloat(formData.amount) : 0,
+      amount: calculatedAmount,
       mileage: formData.type === 'mileage' ? parseFloat(formData.mileage) : 0,
+      category: formData.type === 'mileage' ? 'Mileage' : formData.category,
     };
 
     if (editId) {
@@ -57,7 +82,31 @@ const AddExpense = () => {
     } else {
       addExpense(submittedData);
     }
-    navigate('/');
+
+    if (shouldNavigate) {
+      navigate('/');
+    } else {
+      // Reset for "Save and New"
+      setFormData({
+        amount: '',
+        category: categories.find(c => !hiddenItems?.categories?.includes(c)) || 'Meals',
+        mileageRateId: submittedData.mileageRateId,
+        customer: preferences?.rememberCustomer ? (submittedData.customer || '') : '',
+        project: preferences?.rememberProject ? (submittedData.project || '') : '',
+        date: preferences?.rememberDate ? (submittedData.date || new Date().toISOString().split('T')[0]) : new Date().toISOString().split('T')[0],
+        receiptImage: null,
+        notes: '',
+        paymentMethod: preferences?.rememberPaymentMethod ? (submittedData.paymentMethod || paymentMethods[0]) : paymentMethods[0],
+        type: formData.type, // Keep the same type (expense/mileage)
+        mileage: '',
+      });
+      // Reset new item toggles
+      setShowNewCustomer(false);
+      setShowNewProject(false);
+      setShowNewCategory(false);
+      // Scroll to top
+      window.scrollTo(0, 0);
+    }
   };
 
   const handleChange = (e) => {
@@ -148,17 +197,55 @@ const AddExpense = () => {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-            <select
-              name="category"
-              value={formData.category}
-              onChange={handleChange}
-              className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-            >
-              {categories.map((cat) => (
-                <option key={cat} value={cat}>{cat}</option>
-              ))}
-            </select>
+            <div className="flex justify-between mb-1">
+              <label className="block text-sm font-medium text-gray-700">
+                {formData.type === 'mileage' ? 'Mileage Rate' : 'Category'}
+              </label>
+              {formData.type === 'expense' && (
+                <button
+                  type="button"
+                  onClick={() => setShowNewCategory(!showNewCategory)}
+                  className="text-xs text-blue-600 flex items-center"
+                >
+                  <Plus size={14} className="mr-1" /> New
+                </button>
+              )}
+            </div>
+            {formData.type === 'mileage' ? (
+              <select
+                name="mileageRateId"
+                value={formData.mileageRateId}
+                onChange={handleChange}
+                className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              >
+                {mileageRates.filter(r => !hiddenItems?.mileageRates?.some(h => h.id === r.id)).map((rate) => (
+                  <option key={rate.id} value={rate.id}>
+                    {rate.title} (@ ${rate.value.toFixed(3)})
+                  </option>
+                ))}
+              </select>
+            ) : showNewCategory ? (
+              <input
+                type="text"
+                name="category"
+                value={formData.category}
+                onChange={handleChange}
+                placeholder="Category Name"
+                className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                autoFocus
+              />
+            ) : (
+              <select
+                name="category"
+                value={formData.category}
+                onChange={handleChange}
+                className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              >
+                {categories.filter(c => !hiddenItems?.categories?.includes(c)).map((cat) => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+            )}
           </div>
         </div>
 
@@ -192,7 +279,7 @@ const AddExpense = () => {
                 className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
               >
                 <option value="">Select Customer</option>
-                {customers.map((c) => (
+                {customers.filter(c => !hiddenItems?.customers?.includes(c)).map((c) => (
                   <option key={c} value={c}>{c}</option>
                 ))}
               </select>
@@ -228,7 +315,7 @@ const AddExpense = () => {
                 className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
               >
                 <option value="">Select Project</option>
-                {projects.map((p) => (
+                {projects.filter(p => !hiddenItems?.projects?.includes(p)).map((p) => (
                   <option key={p} value={p}>{p}</option>
                 ))}
               </select>
@@ -244,10 +331,9 @@ const AddExpense = () => {
             onChange={handleChange}
             className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
           >
-            <option value="Credit Card">Credit Card</option>
-            <option value="Debit Card">Debit Card</option>
-            <option value="Cash">Cash</option>
-            <option value="Bank Transfer">Bank Transfer</option>
+            {paymentMethods.filter(pm => !hiddenItems?.paymentMethods?.includes(pm)).map((pm) => (
+              <option key={pm} value={pm}>{pm}</option>
+            ))}
           </select>
         </div>
 
@@ -263,13 +349,25 @@ const AddExpense = () => {
           ></textarea>
         </div>
 
-        <button
-          type="submit"
-          className="w-full py-4 bg-blue-600 text-white font-bold rounded-xl shadow-lg hover:bg-blue-700 transition-colors flex items-center justify-center space-x-2"
-        >
-          <Save size={20} />
-          <span>{editId ? 'Update Entry' : 'Save Entry'}</span>
-        </button>
+        <div className={editId ? "block" : "grid grid-cols-2 gap-4"}>
+          <button
+            type="submit"
+            className="w-full py-4 bg-blue-600 text-white font-bold rounded-xl shadow-lg hover:bg-blue-700 transition-colors flex items-center justify-center space-x-2"
+          >
+            <Save size={20} />
+            <span>{editId ? 'Update Entry' : 'Save Entry'}</span>
+          </button>
+          {!editId && (
+            <button
+              type="button"
+              onClick={(e) => handleSubmit(e, false)}
+              className="w-full py-4 bg-white border-2 border-blue-600 text-blue-600 font-bold rounded-xl shadow-md hover:bg-blue-50 transition-colors flex items-center justify-center space-x-2"
+            >
+              <Plus size={20} />
+              <span>Save & New</span>
+            </button>
+          )}
+        </div>
       </form>
     </div>
   );

@@ -7,24 +7,29 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 const Dashboard = () => {
-  const { expenses, deleteExpense } = useExpenses();
+  const { expenses, deleteExpense, categories } = useExpenses();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCustomer, setFilterCustomer] = useState('');
+  const [filterCategory, setFilterCategory] = useState('');
 
   const filteredExpenses = useMemo(() => {
     return expenses.filter((e) => {
+      const effectiveCategory = e.type === 'mileage' ? 'Mileage' : (e.category || 'Other');
+      
       const matchesSearch =
           (e.notes?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-          (e.category?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+          effectiveCategory.toLowerCase().includes(searchTerm.toLowerCase()) ||
           (e.customer?.toLowerCase() || '').includes(searchTerm.toLowerCase());
+          
       const matchesCustomer = filterCustomer ? e.customer === filterCustomer : true;
-      return matchesSearch && matchesCustomer;
+      const matchesCategory = filterCategory ? effectiveCategory === filterCategory : true;
+      
+      return matchesSearch && matchesCustomer && matchesCategory;
     });
-  }, [expenses, searchTerm, filterCustomer]);
+  }, [expenses, searchTerm, filterCustomer, filterCategory]);
 
   const totalAmount = useMemo(() => {
     return filteredExpenses
-        .filter(e => e.type === 'expense')
         .reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
   }, [filteredExpenses]);
 
@@ -45,10 +50,10 @@ const Dashboard = () => {
     const tableData = filteredExpenses.map((e) => [
       e.date,
       e.type === 'expense' ? 'Expense' : 'Mileage',
-      e.category,
+      e.type === 'mileage' ? 'Mileage' : e.category,
       e.customer || '-',
       e.project || '-',
-      e.type === 'expense' ? `$${(Number(e.amount) || 0).toFixed(2)}` : `${Number(e.mileage) || 0} mi`,
+      e.type === 'expense' ? `$${(Number(e.amount) || 0).toFixed(2)}` : `${Number(e.mileage) || 0} mi ($${(Number(e.amount) || 0).toFixed(2)})`,
       e.paymentMethod || '-',
     ]);
 
@@ -105,6 +110,20 @@ const Dashboard = () => {
               <div className="relative flex-1">
                 <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                 <select
+                    value={filterCategory}
+                    onChange={(e) => setFilterCategory(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 bg-gray-100 border-none rounded-lg focus:ring-2 focus:ring-blue-500 appearance-none"
+                >
+                  <option value="">All Categories</option>
+                  <option value="Mileage">Mileage</option>
+                  {categories.map(c => (
+                      <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="relative flex-1">
+                <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                <select
                     value={filterCustomer}
                     onChange={(e) => setFilterCustomer(e.target.value)}
                     className="w-full pl-10 pr-4 py-2 bg-gray-100 border-none rounded-lg focus:ring-2 focus:ring-blue-500 appearance-none"
@@ -139,14 +158,14 @@ const Dashboard = () => {
               filteredExpenses.map((expense) => (
                   <div key={expense.id} className="bg-white p-4 rounded-xl border shadow-sm flex items-center space-x-4">
                     <div className={`p-3 rounded-lg ${expense.type === 'expense' ? 'bg-blue-100 text-blue-600' : 'bg-green-100 text-green-600'}`}>
-                      {expense.receiptImage ? <ImageIcon size={20} /> : <div className="w-5 h-5 flex items-center justify-center font-bold text-xs">{expense.category[0]}</div>}
+                      {expense.receiptImage ? <ImageIcon size={20} /> : <div className="w-5 h-5 flex items-center justify-center font-bold text-xs">{(expense.type === 'mileage' ? 'Mileage' : expense.category)[0]}</div>}
                     </div>
 
                     <div className="flex-1 min-w-0">
                       <div className="flex justify-between items-start">
-                        <h3 className="font-semibold text-gray-900 truncate">{expense.category}</h3>
+                        <h3 className="font-semibold text-gray-900 truncate">{expense.type === 'mileage' ? 'Mileage' : expense.category}</h3>
                         <span className="font-bold text-gray-900">
-                    {expense.type === 'expense' ? `$${(Number(expense.amount) || 0).toFixed(2)}` : `${Number(expense.mileage) || 0} mi`}
+                    {expense.type === 'expense' ? `$${(Number(expense.amount) || 0).toFixed(2)}` : `${Number(expense.mileage) || 0} mi ($${(Number(expense.amount) || 0).toFixed(2)})`}
                   </span>
                       </div>
                       <div className="text-sm text-gray-500 flex items-center justify-between">
