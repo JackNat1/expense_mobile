@@ -15,6 +15,7 @@ const AddExpense = () => {
     categories, 
     customers, 
     projects, 
+    workSegments,
     paymentMethods,
     mileageRates,
     hiddenItems,
@@ -28,6 +29,7 @@ const AddExpense = () => {
     mileageRateId: mileageRates.find(r => !hiddenItems?.mileageRates?.some(h => h.id === r.id))?.id || (mileageRates[0]?.id || ''),
     customer: preferences?.rememberCustomer ? (lastEntry?.customer || '') : '',
     project: preferences?.rememberProject ? (lastEntry?.project || '') : '',
+    workSegment: lastEntry?.workSegment || '',
     date: preferences?.rememberDate ? (lastEntry?.date || new Date().toISOString().split('T')[0]) : new Date().toISOString().split('T')[0],
     receiptImage: null,
     notes: '',
@@ -39,6 +41,7 @@ const AddExpense = () => {
   const [showNewCustomer, setShowNewCustomer] = useState(false);
   const [showNewProject, setShowNewProject] = useState(false);
   const [showNewCategory, setShowNewCategory] = useState(false);
+  const [showNewWorkSegment, setShowNewWorkSegment] = useState(false);
 
   useEffect(() => {
     if (editId && expenses.length > 0) {
@@ -94,6 +97,7 @@ const AddExpense = () => {
         customer: preferences?.rememberCustomer ? (submittedData.customer || '') : '',
         project: preferences?.rememberProject ? (submittedData.project || '') : '',
         date: preferences?.rememberDate ? (submittedData.date || new Date().toISOString().split('T')[0]) : new Date().toISOString().split('T')[0],
+        workSegment: submittedData.workSegment || '',
         receiptImage: null,
         notes: '',
         paymentMethod: preferences?.rememberPaymentMethod ? (submittedData.paymentMethod || paymentMethods[0]) : paymentMethods[0],
@@ -104,6 +108,7 @@ const AddExpense = () => {
       setShowNewCustomer(false);
       setShowNewProject(false);
       setShowNewCategory(false);
+      setShowNewWorkSegment(false);
       // Scroll to top
       window.scrollTo(0, 0);
     }
@@ -315,9 +320,55 @@ const AddExpense = () => {
                 className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
               >
                 <option value="">Select Project</option>
-                {projects.filter(p => !hiddenItems?.projects?.includes(p)).map((p) => (
-                  <option key={p} value={p}>{p}</option>
-                ))}
+                {projects
+                  .filter(p => !hiddenItems?.projects?.includes(p.id || p.name))
+                  .filter(p => !formData.customer || !p.customerId || p.customerId === formData.customer)
+                  .map((p) => (
+                    <option key={p.id || p.name} value={p.name}>{p.name}{p.customerId ? '' : ' (Agnostic)'}</option>
+                  ))}
+              </select>
+            )}
+          </div>
+
+          <div>
+            <div className="flex justify-between mb-1">
+              <label className="block text-sm font-medium text-gray-700">Work Segment</label>
+              <button
+                type="button"
+                onClick={() => setShowNewWorkSegment(!showNewWorkSegment)}
+                className="text-xs text-blue-600 flex items-center"
+              >
+                <Plus size={14} className="mr-1" /> New
+              </button>
+            </div>
+            {showNewWorkSegment ? (
+              <input
+                type="text"
+                name="workSegment"
+                value={formData.workSegment}
+                onChange={handleChange}
+                placeholder="Work Segment Name"
+                className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                autoFocus
+              />
+            ) : (
+              <select
+                name="workSegment"
+                value={formData.workSegment}
+                onChange={handleChange}
+                className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              >
+                <option value="">Select Work Segment</option>
+                {workSegments
+                  .filter(ws => !hiddenItems?.workSegments?.includes(ws.id || ws.name))
+                  .filter(ws => {
+                    if (!formData.project) return true;
+                    const project = projects.find(p => p.name === formData.project);
+                    return ws.projectId === (project?.id || project?.name);
+                  })
+                  .map((ws) => (
+                    <option key={ws.id || ws.name} value={ws.name}>{ws.name}</option>
+                  ))}
               </select>
             )}
           </div>

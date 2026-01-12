@@ -36,6 +36,18 @@ export const ExpenseProvider = ({ children }) => {
   const [projects, setProjects] = useState(() => {
     try {
       const saved = localStorage.getItem('projects');
+      if (!saved) return [];
+      const parsed = JSON.parse(saved);
+      // Migration: convert string projects to objects
+      return parsed.map(p => typeof p === 'string' ? { id: p, name: p, customerId: null } : p);
+    } catch (e) {
+      return [];
+    }
+  });
+
+  const [workSegments, setWorkSegments] = useState(() => {
+    try {
+      const saved = localStorage.getItem('work_segments');
       return saved ? JSON.parse(saved) : [];
     } catch (e) {
       return [];
@@ -73,6 +85,7 @@ export const ExpenseProvider = ({ children }) => {
         categories: [],
         customers: [],
         projects: [],
+        workSegments: [],
         paymentMethods: [],
         mileageRates: []
       };
@@ -81,6 +94,7 @@ export const ExpenseProvider = ({ children }) => {
         categories: [],
         customers: [],
         projects: [],
+        workSegments: [],
         paymentMethods: [],
         mileageRates: []
       };
@@ -132,6 +146,10 @@ export const ExpenseProvider = ({ children }) => {
   }, [projects]);
 
   useEffect(() => {
+    localStorage.setItem('work_segments', JSON.stringify(workSegments));
+  }, [workSegments]);
+
+  useEffect(() => {
     localStorage.setItem('payment_methods', JSON.stringify(paymentMethods));
   }, [paymentMethods]);
 
@@ -162,6 +180,7 @@ export const ExpenseProvider = ({ children }) => {
     setLastEntry({
       customer: expense.customer,
       project: expense.project,
+      workSegment: expense.workSegment,
       paymentMethod: expense.paymentMethod,
       date: expense.date
     });
@@ -171,8 +190,8 @@ export const ExpenseProvider = ({ children }) => {
       setCustomers((prev) => [...prev, expense.customer]);
       setHiddenItems(prev => ({ ...prev, customers: prev.customers.filter(c => c !== expense.customer) }));
     }
-    if (expense.project && !projects.includes(expense.project)) {
-      setProjects((prev) => [...prev, expense.project]);
+    if (expense.project && !projects.some(p => p.name === expense.project)) {
+      setProjects((prev) => [...prev, { id: expense.project, name: expense.project, customerId: expense.customer || null }]);
       setHiddenItems(prev => ({ ...prev, projects: prev.projects.filter(p => p !== expense.project) }));
     }
     if (expense.category && !categories.includes(expense.category)) {
@@ -189,6 +208,7 @@ export const ExpenseProvider = ({ children }) => {
     setLastEntry({
       customer: updatedExpense.customer,
       project: updatedExpense.project,
+      workSegment: updatedExpense.workSegment,
       paymentMethod: updatedExpense.paymentMethod,
       date: updatedExpense.date
     });
@@ -198,8 +218,8 @@ export const ExpenseProvider = ({ children }) => {
       setCustomers((prev) => [...prev, updatedExpense.customer]);
       setHiddenItems(prev => ({ ...prev, customers: prev.customers.filter(c => c !== updatedExpense.customer) }));
     }
-    if (updatedExpense.project && !projects.includes(updatedExpense.project)) {
-      setProjects((prev) => [...prev, updatedExpense.project]);
+    if (updatedExpense.project && !projects.some(p => p.name === updatedExpense.project)) {
+      setProjects((prev) => [...prev, { id: updatedExpense.project, name: updatedExpense.project, customerId: updatedExpense.customer || null }]);
       setHiddenItems(prev => ({ ...prev, projects: prev.projects.filter(p => p !== updatedExpense.project) }));
     }
     if (updatedExpense.category && !categories.includes(updatedExpense.category)) {
@@ -219,7 +239,9 @@ export const ExpenseProvider = ({ children }) => {
       case 'customers':
         return expenses.some(e => e.customer === value);
       case 'projects':
-        return expenses.some(e => e.project === value);
+        return expenses.some(e => e.project === value.name);
+      case 'workSegments':
+        return expenses.some(e => e.workSegment === value.name);
       case 'paymentMethods':
         return expenses.some(e => e.paymentMethod === value);
       case 'mileageRates':
@@ -240,6 +262,9 @@ export const ExpenseProvider = ({ children }) => {
       case 'projects':
         setProjects(newList);
         break;
+      case 'workSegments':
+        setWorkSegments(newList);
+        break;
       case 'paymentMethods':
         setPaymentMethods(newList);
         break;
@@ -252,10 +277,11 @@ export const ExpenseProvider = ({ children }) => {
   const toggleItemVisibility = (type, value) => {
     setHiddenItems(prev => {
       const currentHidden = prev[type] || [];
-      if (currentHidden.includes(value)) {
-        return { ...prev, [type]: currentHidden.filter(i => i !== value) };
+      const id = typeof value === 'object' ? (value.id || value.name) : value;
+      if (currentHidden.includes(id)) {
+        return { ...prev, [type]: currentHidden.filter(i => i !== id) };
       } else {
-        return { ...prev, [type]: [...currentHidden, value] };
+        return { ...prev, [type]: [...currentHidden, id] };
       }
     });
   };
@@ -267,6 +293,7 @@ export const ExpenseProvider = ({ children }) => {
         categories,
         customers,
         projects,
+        workSegments,
         paymentMethods,
         mileageRates,
         hiddenItems,

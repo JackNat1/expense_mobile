@@ -11,6 +11,8 @@ const Dashboard = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCustomer, setFilterCustomer] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
+  const [filterProject, setFilterProject] = useState('');
+  const [filterWorkSegment, setFilterWorkSegment] = useState('');
 
   const filteredExpenses = useMemo(() => {
     return expenses.filter((e) => {
@@ -23,10 +25,42 @@ const Dashboard = () => {
           
       const matchesCustomer = filterCustomer ? e.customer === filterCustomer : true;
       const matchesCategory = filterCategory ? effectiveCategory === filterCategory : true;
+      const matchesProject = filterProject ? e.project === filterProject : true;
+      const matchesWorkSegment = filterWorkSegment ? e.workSegment === filterWorkSegment : true;
       
-      return matchesSearch && matchesCustomer && matchesCategory;
+      return matchesSearch && matchesCustomer && matchesCategory && matchesProject && matchesWorkSegment;
     });
-  }, [expenses, searchTerm, filterCustomer, filterCategory]);
+  }, [expenses, searchTerm, filterCustomer, filterCategory, filterProject, filterWorkSegment]);
+
+  const availableFilters = useMemo(() => {
+    const getFiltered = (exclude) => {
+      return expenses.filter(e => {
+        const effectiveCategory = e.type === 'mileage' ? 'Mileage' : (e.category || 'Other');
+        const matchesSearch = (e.notes?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+                             effectiveCategory.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                             (e.customer?.toLowerCase() || '').includes(searchTerm.toLowerCase());
+        
+        const matchesCustomer = (exclude === 'customer' || !filterCustomer) ? true : e.customer === filterCustomer;
+        const matchesCategory = (exclude === 'category' || !filterCategory) ? true : effectiveCategory === filterCategory;
+        const matchesProject = (exclude === 'project' || !filterProject) ? true : e.project === filterProject;
+        const matchesWorkSegment = (exclude === 'workSegment' || !filterWorkSegment) ? true : e.workSegment === filterWorkSegment;
+        
+        return matchesSearch && matchesCustomer && matchesCategory && matchesProject && matchesWorkSegment;
+      });
+    };
+
+    const forCustomer = getFiltered('customer');
+    const forCategory = getFiltered('category');
+    const forProject = getFiltered('project');
+    const forWorkSegment = getFiltered('workSegment');
+
+    return {
+      customers: [...new Set(forCustomer.map(e => e.customer).filter(Boolean))].sort(),
+      categories: [...new Set(forCategory.map(e => e.type === 'mileage' ? 'Mileage' : (e.category || 'Other')))].sort(),
+      projects: [...new Set(forProject.map(e => e.project).filter(Boolean))].sort(),
+      workSegments: [...new Set(forWorkSegment.map(e => e.workSegment).filter(Boolean))].sort(),
+    };
+  }, [expenses, searchTerm, filterCustomer, filterCategory, filterProject, filterWorkSegment]);
 
   const totalAmount = useMemo(() => {
     return filteredExpenses
@@ -47,23 +81,64 @@ const Dashboard = () => {
     doc.setTextColor(100);
     doc.text(`Generated on: ${format(new Date(), 'PPpp')}`, 14, 30);
 
-    const tableData = filteredExpenses.map((e) => [
+    // Sort expenses by date
+    const sortedExpenses = [...filteredExpenses].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    const tableData = sortedExpenses.map((e) => [
       e.date,
       e.type === 'expense' ? 'Expense' : 'Mileage',
       e.type === 'mileage' ? 'Mileage' : e.category,
       e.customer || '-',
       e.project || '-',
+      e.workSegment || '-',
       e.type === 'expense' ? `$${(Number(e.amount) || 0).toFixed(2)}` : `${Number(e.mileage) || 0} mi ($${(Number(e.amount) || 0).toFixed(2)})`,
       e.paymentMethod || '-',
     ]);
 
+    // Generate Category Summary
+    const categoriesWithMileage = [...categories, 'Mileage'];
+    const categoryTotals = sortedExpenses.reduce((acc, e) => {
+      const cat = e.type === 'mileage' ? 'Mileage' : (e.category || 'Other');
+      acc[cat] = (acc[cat] || 0) + (Number(e.amount) || 0);
+      return acc;
+    }, {});
+
+    // Sort categories based on the order in categoriesWithMileage
+    const summaryData = categoriesWithMileage
+      .filter(cat => categoryTotals[cat] > 0)
+      .map(cat => [cat, `$${categoryTotals[cat].toFixed(2)}`]);
+
+    // Add 'Other' if it has entries and isn't in categories
+    if (categoryTotals['Other'] > 0 && !categoriesWithMileage.includes('Other')) {
+      summaryData.push(['Other', `$${categoryTotals['Other'].toFixed(2)}`]);
+    }
+
+    // Add Summary Table at the top
+    doc.setFontSize(14);
+    doc.text('Category Summary', 14, 40);
     autoTable(doc, {
-      startY: 40,
-      head: [['Date', 'Type', 'Category', 'Customer', 'Project', 'Amount/Dist', 'Payment']],
+      startY: 45,
+      head: [['Category', 'Total Amount']],
+      body: summaryData,
+      theme: 'striped',
+      headStyles: { fillColor: [100, 100, 100] },
+      columnStyles: { 1: { halign: 'right' } },
+      margin: { left: 14 },
+      tableWidth: 100,
+    });
+
+    let finalY = doc.lastAutoTable.finalY || 45;
+
+    // Add Detail Table below Summary
+    doc.setFontSize(14);
+    doc.text('Expense Details', 14, finalY + 15);
+    autoTable(doc, {
+      startY: finalY + 20,
+      head: [['Date', 'Type', 'Category', 'Customer', 'Project', 'Work Segment', 'Amount/Dist', 'Payment']],
       body: tableData,
     });
 
-    const finalY = doc.lastAutoTable.finalY || 40;
+    finalY = doc.lastAutoTable.finalY || (finalY + 20);
     doc.setFontSize(12);
     doc.setTextColor(0);
     doc.text(`Total Expenses: $${totalAmount.toFixed(2)}`, 14, finalY + 10);
@@ -115,8 +190,7 @@ const Dashboard = () => {
                     className="w-full pl-10 pr-4 py-2 bg-gray-100 border-none rounded-lg focus:ring-2 focus:ring-blue-500 appearance-none"
                 >
                   <option value="">All Categories</option>
-                  <option value="Mileage">Mileage</option>
-                  {categories.map(c => (
+                  {availableFilters.categories.map(c => (
                       <option key={c} value={c}>{c}</option>
                   ))}
                 </select>
@@ -129,8 +203,36 @@ const Dashboard = () => {
                     className="w-full pl-10 pr-4 py-2 bg-gray-100 border-none rounded-lg focus:ring-2 focus:ring-blue-500 appearance-none"
                 >
                   <option value="">All Customers</option>
-                  {[...new Set(expenses.map(e => e.customer).filter(Boolean))].map(c => (
+                  {availableFilters.customers.map(c => (
                       <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="flex space-x-2">
+              <div className="relative flex-1">
+                <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                <select
+                    value={filterProject}
+                    onChange={(e) => setFilterProject(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 bg-gray-100 border-none rounded-lg focus:ring-2 focus:ring-blue-500 appearance-none"
+                >
+                  <option value="">All Projects</option>
+                  {availableFilters.projects.map(p => (
+                      <option key={p} value={p}>{p}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="relative flex-1">
+                <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                <select
+                    value={filterWorkSegment}
+                    onChange={(e) => setFilterWorkSegment(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 bg-gray-100 border-none rounded-lg focus:ring-2 focus:ring-blue-500 appearance-none"
+                >
+                  <option value="">All Work Segments</option>
+                  {availableFilters.workSegments.map(ws => (
+                      <option key={ws} value={ws}>{ws}</option>
                   ))}
                 </select>
               </div>
@@ -163,7 +265,10 @@ const Dashboard = () => {
 
                     <div className="flex-1 min-w-0">
                       <div className="flex justify-between items-start">
-                        <h3 className="font-semibold text-gray-900 truncate">{expense.type === 'mileage' ? 'Mileage' : expense.category}</h3>
+                        <h3 className="font-semibold text-gray-900 truncate">
+                          {expense.type === 'mileage' ? 'Mileage' : expense.category}
+                          {expense.workSegment && <span className="text-xs text-gray-500 ml-2 font-normal">({expense.workSegment})</span>}
+                        </h3>
                         <span className="font-bold text-gray-900">
                     {expense.type === 'expense' ? `$${(Number(expense.amount) || 0).toFixed(2)}` : `${Number(expense.mileage) || 0} mi ($${(Number(expense.amount) || 0).toFixed(2)})`}
                   </span>

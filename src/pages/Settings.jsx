@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { useExpenses } from '../context/ExpenseContext';
 
-const ListEditor = ({ title, type, items, hiddenItems, onUpdate, onToggleVisibility, isUsed }) => {
+const ListEditor = ({ title, type, items, hiddenItems, onUpdate, onToggleVisibility, isUsed, contextData }) => {
   const moveItem = (index, direction) => {
     const newList = [...items];
     const newIndex = index + direction;
@@ -16,21 +16,22 @@ const ListEditor = ({ title, type, items, hiddenItems, onUpdate, onToggleVisibil
     }
   };
 
-  const deleteItem = (value) => {
-    const displayValue = typeof value === 'object' ? value.title : value;
-    if (isUsed(type, value)) {
+  const deleteItem = (item) => {
+    const displayValue = typeof item === 'object' ? (item.title || item.name) : item;
+    if (isUsed(type, item)) {
       alert(`Cannot delete "${displayValue}" because it is already used in one or more entries.`);
       return;
     }
     if (confirm(`Are you sure you want to delete "${displayValue}"?`)) {
-      onUpdate(type, items.filter(i => i !== value));
+      const id = typeof item === 'object' ? (item.id || item.name) : item;
+      onUpdate(type, items.filter(i => (typeof i === 'object' ? (i.id || i.name) : i) !== id));
     }
   };
 
   const sortAlphanumerically = () => {
     const newList = [...items].sort((a, b) => {
-      const valA = typeof a === 'object' ? a.title : a;
-      const valB = typeof b === 'object' ? b.title : b;
+      const valA = typeof a === 'object' ? (a.title || a.name) : a;
+      const valB = typeof b === 'object' ? (b.title || b.name) : b;
       return valA.localeCompare(valB);
     });
     onUpdate(type, newList);
@@ -49,6 +50,49 @@ const ListEditor = ({ title, type, items, hiddenItems, onUpdate, onToggleVisibil
         value: parseFloat(value)
       };
       onUpdate(type, [...items, newRate]);
+    } else if (type === 'projects') {
+      const name = prompt("Enter project name:");
+      if (!name) return;
+      const customers = contextData?.customers || [];
+      const customerList = customers.map((c, i) => `${i + 1}. ${c}`).join('\n');
+      const customerChoice = prompt(`Associate with a customer? (Enter number or leave blank for agnostic):\n${customerList}`);
+      
+      let customerId = null;
+      if (customerChoice && !isNaN(parseInt(customerChoice))) {
+        customerId = customers[parseInt(customerChoice) - 1] || null;
+      }
+      
+      const newProject = {
+        id: name,
+        name,
+        customerId
+      };
+      onUpdate(type, [...items, newProject]);
+    } else if (type === 'workSegments') {
+      const name = prompt("Enter work segment name:");
+      if (!name) return;
+      
+      const projects = contextData?.projects || [];
+      const projectList = projects.map((p, i) => `${i + 1}. ${p.name}`).join('\n');
+      const projectChoice = prompt(`Select project for this work segment:\n${projectList}`);
+      
+      if (!projectChoice || isNaN(parseInt(projectChoice)) || !projects[parseInt(projectChoice) - 1]) {
+        alert("Project is required for work segments.");
+        return;
+      }
+      
+      const project = projects[parseInt(projectChoice) - 1];
+      const startDate = prompt("Enter start date (YYYY-MM-DD) or leave blank:");
+      const endDate = prompt("Enter end date (YYYY-MM-DD) or leave blank:");
+      
+      const newSegment = {
+        id: name,
+        name,
+        projectId: project.id || project.name,
+        startDate: startDate || null,
+        endDate: endDate || null
+      };
+      onUpdate(type, [...items, newSegment]);
     } else {
       const newValue = prompt(`Enter new ${title.toLowerCase().slice(0, -1)}:`);
       if (newValue) {
@@ -79,12 +123,21 @@ const ListEditor = ({ title, type, items, hiddenItems, onUpdate, onToggleVisibil
       <ul className="divide-y divide-gray-100">
         {items.map((item, index) => {
           const isHidden = hiddenItems.some(h => 
-            typeof h === 'object' ? h.id === item.id : h === item
+            typeof h === 'object' ? h.id === item.id : h === (item.id || item.name || item)
           );
-          const displayValue = typeof item === 'object' ? `${item.title} (@ $${item.value.toFixed(3)})` : item;
+          
+          let displayValue = typeof item === 'object' ? (item.title || item.name) : item;
+          if (type === 'mileageRates') {
+            displayValue = `${item.title} (@ $${item.value.toFixed(3)})`;
+          } else if (type === 'projects') {
+            displayValue = `${item.name}${item.customerId ? ` (${item.customerId})` : ' (Agnostic)'}`;
+          } else if (type === 'workSegments') {
+            const project = contextData?.projects?.find(p => (p.id || p.name) === item.projectId);
+            displayValue = `${item.name} [${project?.name || 'Unknown'}]${(item.startDate || item.endDate) ? ` (${item.startDate || ''} to ${item.endDate || ''})` : ''}`;
+          }
           
           return (
-            <li key={typeof item === 'object' ? item.id : item} className={`flex items-center justify-between p-3 ${isHidden ? 'bg-gray-50 opacity-60' : ''}`}>
+            <li key={typeof item === 'object' ? (item.id || item.name) : item} className={`flex items-center justify-between p-3 ${isHidden ? 'bg-gray-50 opacity-60' : ''}`}>
               <span className={`flex-1 font-medium ${isHidden ? 'text-gray-400 line-through' : 'text-gray-700'}`}>
                 {displayValue}
               </span>
@@ -133,7 +186,7 @@ const Settings = () => {
   const navigate = useNavigate();
   const { 
     preferences, setPreferences, 
-    categories, customers, projects, paymentMethods, mileageRates,
+    categories, customers, projects, workSegments, paymentMethods, mileageRates,
     hiddenItems, updateList, toggleItemVisibility, isItemUsed
   } = useExpenses();
   const [syncMode, setSyncMode] = useState(() => {
@@ -363,6 +416,18 @@ const Settings = () => {
             onUpdate={updateList}
             onToggleVisibility={toggleItemVisibility}
             isUsed={isItemUsed}
+            contextData={{ customers }}
+          />
+
+          <ListEditor 
+            title="Work Segments" 
+            type="workSegments"
+            items={workSegments} 
+            hiddenItems={hiddenItems.workSegments || []}
+            onUpdate={updateList}
+            onToggleVisibility={toggleItemVisibility}
+            isUsed={isItemUsed}
+            contextData={{ projects }}
           />
 
           <ListEditor 
