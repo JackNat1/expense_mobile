@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useExpenses } from '../context/ExpenseContext';
 import { Plus, Download, Search, Filter, Trash2, Edit2, Image as ImageIcon, Settings } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
-import jsPDF from 'jspdf';
+import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 const Dashboard = () => {
@@ -138,11 +138,11 @@ const Dashboard = () => {
           </div>
 
           <div className="mt-4 flex gap-4 overflow-x-auto pb-2">
-            <div className="bg-blue-50 p-3 rounded-xl min-w-[140px]">
+            <div className="bg-blue-50 p-3 rounded-xl min-w-35">
               <p className="text-xs text-blue-600 font-semibold uppercase">Total Expenses</p>
               <p className="text-xl font-bold text-blue-900">${totalAmount.toFixed(2)}</p>
             </div>
-            <div className="bg-green-50 p-3 rounded-xl min-w-[140px]">
+            <div className="bg-green-50 p-3 rounded-xl min-w-35">
               <p className="text-xs text-green-600 font-semibold uppercase">Total Mileage</p>
               <p className="text-xl font-bold text-green-900">{totalMileage.toFixed(1)} mi</p>
             </div>
